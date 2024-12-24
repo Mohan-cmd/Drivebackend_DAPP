@@ -7,6 +7,15 @@ contract Upload{
         bool access;
     }
 
+    struct Folder{
+        string folderName;   
+        string[] files;
+    }
+    
+       mapping(address => Folder[]) folders;
+       mapping(address=> mapping(address=>mapping(string=>bool))) ownershipNew;
+       
+
     mapping(address=>string[]) value;   
     mapping(address=>mapping(address=>bool)) ownership;
     mapping(address=>Access[]) accessList;
@@ -39,12 +48,88 @@ contract Upload{
         }
     }
 
-    function display(address _user) external view returns(string[] memory){
-        require(_user==msg.sender || ownership[_user][msg.sender],"you do not have access");
-        return value[_user];
+    function display(address _user) external view returns(Folder[] memory){
+        require(_user == msg.sender || ownership[_user][msg.sender], "You do not have access");
+        return folders[_user];
     }
 
     function shareAccess() public view returns(Access[] memory){
         return accessList[msg.sender];
     }
+
+
+    function addFileToFolder(string memory folderName,string memory url) external{
+        Folder[] storage userFolders = folders[msg.sender];
+        bool folderExists= false;
+
+        for(uint i=0; i<userFolders.length;i++){
+            if(keccak256(bytes(userFolders[i].folderName))== keccak256(bytes(folderName))){
+                 userFolders[i].files.push(url);
+                 folderExists =true;
+                 break;
+            }
+        }
+        if(! folderExists){
+            //Folder memory newFolder;
+            Folder storage newFolder = folders[msg.sender].push();
+            newFolder.folderName = folderName;
+            // folders[msg.sender].push(newFolder);
+
+            // folders[msg.sender][userFolders.length].files.push(url);
+            newFolder.files.push(url);
+           
+        }
+    }
+
+    function allowFolderAccess(address user,string memory folderName) external{
+        ownershipNew[msg.sender][user][folderName]=true;
+    }
+
+    function disallowAccessToFolder(address user,string memory folderName) external{
+        ownershipNew[msg.sender][user][folderName]=false;
+    }
+
+    function displayFolderFiles(address _user,string memory folderName) external view returns(string[] memory){
+       require(_user==msg.sender || ownershipNew[_user][msg.sender][folderName],"you do not have access");
+       Folder[] storage userFolders = folders[_user];
+
+       for(uint i=0;i<userFolders.length;i++){
+        if(keccak256(bytes(userFolders[i].folderName))== keccak256(bytes(folderName))){
+            return userFolders[i].files;
+        }
+       }
+       revert("Folder not found");
+    }
+
+
+    function getAllFolders(address _user) external view returns(Folder[] memory){
+        require(_user==msg.sender,"you do  not have access");
+        return folders[_user];
+    }
+    function getSharedFolders(address owner, address requester) external view returns (Folder[] memory) {
+    require(owner != requester, "Owner and requester cannot be the same");
+    Folder[] storage userFolders = folders[owner];
+    uint sharedCount = 0;
+
+    // First, count how many folders are shared
+    for (uint i = 0; i < userFolders.length; i++) {
+        if (ownershipNew[owner][requester][userFolders[i].folderName]) {
+            sharedCount++;
+        }
+    }
+
+    // Create a dynamic array for the shared folders
+    Folder[] memory sharedFolders = new Folder[](sharedCount);
+    uint index = 0;
+
+    for (uint i = 0; i < userFolders.length; i++) {
+        if (ownershipNew[owner][requester][userFolders[i].folderName]) {
+            sharedFolders[index] = userFolders[i];
+            index++;
+        }
+    }
+
+    return sharedFolders;
+}
+
 }
